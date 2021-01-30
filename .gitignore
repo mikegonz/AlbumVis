@@ -1,0 +1,5 @@
+.DS_STORE
+*~
+.cache*
+cached_albums/*/*.png
+cached_albums/*/*.jpg
