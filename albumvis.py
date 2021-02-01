@@ -15,7 +15,10 @@ from spotipy.oauth2 import SpotifyOAuth
 MAC = True
 mode = 'solid'
 
-mult = 2 if MAC else 1
+MULT = 2 if MAC else 1
+
+WIDTH = 2560
+HEIGHT = 1600
 
 sp = spotipy.Spotify()
 
@@ -57,7 +60,11 @@ def hsvtorgb(hsv):
     rgb = colorsys.hsv_to_rgb(hsv[0]/360, hsv[1]/100, hsv[2]/100)
     return (round(rgb[0]*255), round(rgb[1]*255), round(rgb[2]*255))
 
-def renderImageMirrorSide(im, writePath):
+def renderImageMirrorSide(im, writePath, isBlur):
+    width = floor(WIDTH / MULT)
+    height = floor(HEIGHT / MULT)
+    print(im.width, im.height)
+    
     topcol = (0, 0, 0)
     botcol = (0, 0, 0)
     y = (im.height/32)
@@ -71,35 +78,34 @@ def renderImageMirrorSide(im, writePath):
         botcol = tuple(map(operator.add, botcol, im.getpixel((x,y))))
     topcol = tuple(map(operator.floordiv, topcol, (16, 16, 16)))
     botcol = tuple(map(operator.floordiv, botcol, (16, 16, 16)))
-    width = 2560
-    height = 1600
-    maskim = Image.new('RGB', (320, 640), tuple(map(operator.floordiv, tuple(map(operator.add, topcol, botcol)), (2, 2, 2))))
-    leftim = im.crop((0, 0, 320, 640)).transpose(Image.FLIP_LEFT_RIGHT)#.filter(ImageFilter.GaussianBlur(10))
-    #leftim = Image.blend(leftim, maskim, 0.25)
-    rightim = im.crop((320, 0, 640, 640)).transpose(Image.FLIP_LEFT_RIGHT)#.filter(ImageFilter.GaussianBlur(10))
-    #rightim = Image.blend(rightim, maskim, 0.25)
-    full = Image.new('RGB', (floor(width/mult), floor(height/mult)), botcol)
-    full.paste(Image.new('RGB', (floor(width/mult), floor(height/mult/2)), topcol),
-                (0, 0, floor(width/mult), floor(height/mult/2)))
-    try:
-        full.paste(im, (floor((width/2)/mult-320), floor((height/2)/mult-320), floor((width/2)/mult+320), floor((height/2)/mult+320)))
-        full.paste(leftim, (floor((width/2)/mult-320-320), floor((height/2)/mult-320), floor((width/2)/mult-320), floor((height/2)/mult+320)))
-        full.paste(rightim, (floor((width/2)/mult+320), floor((height/2)/mult-320), floor((width/2)/mult+320+320), floor((height/2)/mult+320)))
-        full.save(writePath, 'PNG')
-        print("saved image to", writePath)
-        nextim = full
-    except:
-        print('image is not 640x640')
-        # currpath = 'uhoh.jpg'
-        nextim = errim
+
+    sidePanelWidth = floor((width - im.width) / 2)
+    borderHeight = floor((height - im.height) / 2)
+
+    leftPanel = im.crop((0, 0, sidePanelWidth, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
+    rightPanel = im.crop((im.width - sidePanelWidth, 0, im.width, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
+    
+    if(isBlur):
+        maskim = Image.new('RGB', (320, 640), tuple(map(operator.floordiv, tuple(map(operator.add, topcol, botcol)), (2, 2, 2))))
+        leftPanel = Image.blend(leftPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
+        rightPanel = Image.blend(rightPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
+
+    fullim = Image.new('RGB', (width, height), botcol)
+    fullim.paste(im, (sidePanelWidth, borderHeight, sidePanelWidth + im.width, borderHeight + im.height))
+    fullim.paste(leftPanel, (0, borderHeight, sidePanelWidth, height - borderHeight))
+    fullim.paste(rightPanel, (width - sidePanelWidth, borderHeight, width, height - borderHeight))
+    fullim.save(writePath, 'PNG')
+
+    print("saved image to", writePath)
+    nextim = fullim
     return nextim
 
 def renderImageGradientRect(im, writePath):
     width = 2560
     height = 1600
-    full = Image.new('RGB', (floor(width/mult), floor(height/mult)), 'black')
+    full = Image.new('RGB', (floor(width/MULT), floor(height/MULT)), 'black')
     try:
-        full.paste(im, (floor((width/2)/mult-320), floor((height/2)/mult-320), floor((width/2)/mult+320), floor((height/2)/mult+320)))
+        full.paste(im, (floor((width/2)/MULT-320), floor((height/2)/MULT-320), floor((width/2)/MULT+320), floor((height/2)/MULT+320)))
         full.save(writePath, 'PNG')
         nextim = full
     except:
@@ -125,18 +131,18 @@ def renderImageSolid(im, writePath):
     avgcol = tuple(map(operator.floordiv, avgcol, (60, 60, 60)))
     width = 2560
     height = 1600
-    full = Image.new('RGB', (floor(width/mult), floor(height/mult)), avgcol)
-    #im = im.resize((floor(im.width/mult), floor(im.height/mult)))
-    #full.paste(im, (floor((width/2-320)/mult), floor((height/2-320)/mult), floor((width/2+320)/mult), floor((height/2+320)/mult)))
+    full = Image.new('RGB', (floor(width/MULT), floor(height/MULT)), avgcol)
+    #im = im.resize((floor(im.width/MULT), floor(im.height/MULT)))
+    #full.paste(im, (floor((width/2-320)/MULT), floor((height/2-320)/MULT), floor((width/2+320)/MULT), floor((height/2+320)/MULT)))
     try:
-        full.paste(im, (floor((width/2)/mult-320), floor((height/2)/mult-320), floor((width/2)/mult+320), floor((height/2)/mult+320)))
+        full.paste(im, (floor((width/2)/MULT-320), floor((height/2)/MULT-320), floor((width/2)/MULT+320), floor((height/2)/MULT+320)))
         full.save(writePath, 'PNG')
         nextim = full
     except:
-        currpath = 'uhoh.jpg'
+        # currpath = 'uhoh.jpg'
         nextim = errim
     #full.save('full.png', 'PNG')
-    print(avgcol)
+    return nextim
 
 def checkalbum(sp):
     global currid
@@ -171,11 +177,13 @@ def checkalbum(sp):
                 im = Image.open(pathRaw)
                 print(pathRaw, im.format, "%dx%d" % im.size, im.mode)
                 if(mode == 'mirror-side'):
-                    renderImageMirrorSide(im, path)
+                    nextim = renderImageMirrorSide(im, path, False)
+                elif(mode == 'mirror-side-blur'):
+                    nextim = renderImageMirrorSide(im, path, True)
                 elif(mode == 'gradient-rect'):
-                    renderImageGradientRect(im, path)                                    
+                    nextim = renderImageGradientRect(im, path)                                    
                 elif(mode == 'solid'):
-                    renderImageSolid(im, path)
+                    nextim = renderImageSolid(im, path)
             return (True, 1000)
         else:
             return (False, True)
