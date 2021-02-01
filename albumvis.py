@@ -180,7 +180,7 @@ def checkalbum(sp):
                     nextim = renderImageMirrorSide(im, path, False)
                 elif(mode == 'mirror-side-blur'):
                     nextim = renderImageMirrorSide(im, path, True)
-                elif(mode == 'gradient-rect'):
+                elif(mode == 'center'):
                     nextim = renderImageCenter(im, path)                                    
                 elif(mode == 'solid'):
                     nextim = renderImageSolid(im, path)
@@ -194,7 +194,7 @@ def run(sp):
     root = tk.Tk()
  #   root.overrideredirect(True)
     root.wm_attributes('-fullscreen','true')
-    root.attributes("-topmost", True)
+    #root.attributes("-topmost", True)
     root.tk.call("::tk::unsupported::MacWindowStyle", "style", root._w, "plain", "none")
 
     canvas = tk.Canvas(root, width=(root.winfo_screenwidth()), height=(root.winfo_screenheight()), highlightthickness=0)
@@ -234,7 +234,6 @@ def run(sp):
             canvas.image = ImageTk.PhotoImage(newim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
         elif (floor(changing*100) == 0 or ceil(changing*100) == 0):
-            print("woo")
             newim = Image.open(currpath)
             canvas.image = ImageTk.PhotoImage(newim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
