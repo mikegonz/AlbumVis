@@ -79,10 +79,7 @@ def calcAverageColors(im):
 def renderImageMirrorSide(im, writePath, isBlur):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
-    # print(im.width, im.height)
     
-    
-
     sidePanelWidth = round((width - im.width) / 2)
     borderHeight = round((height - im.height) / 2)
 
@@ -108,18 +105,13 @@ def renderImageMirrorSide(im, writePath, isBlur):
     nextim = fullim
     return nextim
 
-def renderImageGradientRect(im, writePath):
-    width = 2560
-    height = 1600
-    full = Image.new('RGB', (floor(width/MULT), floor(height/MULT)), 'black')
-    try:
-        full.paste(im, (floor((width/2)/MULT-320), floor((height/2)/MULT-320), floor((width/2)/MULT+320), floor((height/2)/MULT+320)))
-        full.save(writePath, 'PNG')
-        nextim = full
-    except:
-        print('image is not 640x640')
-        # currpath = 'uhoh.jpg'
-        nextim = errim   
+def renderImageCenter(im, writePath):
+    width = floor(WIDTH / MULT)
+    height = floor(HEIGHT / MULT)
+    fullim = Image.new('RGB', (width, height), 'black')
+    fullim.paste(im, (floor(width/2 - im.width/2), floor(height/2 - im.height/2), floor(width/2 + im.width/2), floor(height/2 + im.height/2)))
+    fullim.save(writePath, 'PNG')
+    nextim = fullim
     return nextim        
 
 def renderImageSolid(im, writePath):
@@ -139,7 +131,7 @@ def renderImageSolid(im, writePath):
     avgcol = tuple(map(operator.floordiv, avgcol, (60, 60, 60)))
     width = 2560
     height = 1600
-    full = Image.new('RGB', (floor(width/MULT), floor(height/MULT)), avgcol)
+    full = Image.new('RGB', (width, height), avgcol)
     #im = im.resize((floor(im.width/MULT), floor(im.height/MULT)))
     #full.paste(im, (floor((width/2-320)/MULT), floor((height/2-320)/MULT), floor((width/2+320)/MULT), floor((height/2+320)/MULT)))
     try:
@@ -189,7 +181,7 @@ def checkalbum(sp):
                 elif(mode == 'mirror-side-blur'):
                     nextim = renderImageMirrorSide(im, path, True)
                 elif(mode == 'gradient-rect'):
-                    nextim = renderImageGradientRect(im, path)                                    
+                    nextim = renderImageCenter(im, path)                                    
                 elif(mode == 'solid'):
                     nextim = renderImageSolid(im, path)
             return (True, 1000)
