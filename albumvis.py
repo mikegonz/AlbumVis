@@ -60,11 +60,7 @@ def hsvtorgb(hsv):
     rgb = colorsys.hsv_to_rgb(hsv[0]/360, hsv[1]/100, hsv[2]/100)
     return (round(rgb[0]*255), round(rgb[1]*255), round(rgb[2]*255))
 
-def renderImageMirrorSide(im, writePath, isBlur):
-    width = floor(WIDTH / MULT)
-    height = floor(HEIGHT / MULT)
-    # print(im.width, im.height)
-    
+def calcAverageColors(im):
     topcol = (0, 0, 0)
     botcol = (0, 0, 0)
     y = (im.height/32)
@@ -78,6 +74,14 @@ def renderImageMirrorSide(im, writePath, isBlur):
         botcol = tuple(map(operator.add, botcol, im.getpixel((x,y))))
     topcol = tuple(map(operator.floordiv, topcol, (16, 16, 16)))
     botcol = tuple(map(operator.floordiv, botcol, (16, 16, 16)))
+    return topcol, botcol
+
+def renderImageMirrorSide(im, writePath, isBlur):
+    width = floor(WIDTH / MULT)
+    height = floor(HEIGHT / MULT)
+    # print(im.width, im.height)
+    
+    
 
     sidePanelWidth = round((width - im.width) / 2)
     borderHeight = round((height - im.height) / 2)
@@ -85,12 +89,16 @@ def renderImageMirrorSide(im, writePath, isBlur):
     leftPanel = im.crop((0, 0, sidePanelWidth, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
     rightPanel = im.crop((im.width - sidePanelWidth, 0, im.width, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
     
+    topcol, botcol = calcAverageColors(im)
+    print(topcol, botcol)
+
     if(isBlur):
         maskim = Image.new('RGB', (320, 640), tuple(map(operator.floordiv, tuple(map(operator.add, topcol, botcol)), (2, 2, 2))))
         leftPanel = Image.blend(leftPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
         rightPanel = Image.blend(rightPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
 
     fullim = Image.new('RGB', (width, height), botcol)
+    fullim.paste(Image.new('RGB', (width, round(height/2)), topcol), (0, 0, width, round(height/2)))
     fullim.paste(im, (sidePanelWidth, borderHeight, sidePanelWidth + im.width, borderHeight + im.height))
     fullim.paste(leftPanel, (0, borderHeight, sidePanelWidth, im.height + borderHeight))
     fullim.paste(rightPanel, (width - sidePanelWidth, borderHeight, width, im.height + borderHeight))
