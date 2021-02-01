@@ -63,7 +63,7 @@ def hsvtorgb(hsv):
 def renderImageMirrorSide(im, writePath, isBlur):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
-    print(im.width, im.height)
+    # print(im.width, im.height)
     
     topcol = (0, 0, 0)
     botcol = (0, 0, 0)
@@ -79,8 +79,8 @@ def renderImageMirrorSide(im, writePath, isBlur):
     topcol = tuple(map(operator.floordiv, topcol, (16, 16, 16)))
     botcol = tuple(map(operator.floordiv, botcol, (16, 16, 16)))
 
-    sidePanelWidth = floor((width - im.width) / 2)
-    borderHeight = floor((height - im.height) / 2)
+    sidePanelWidth = round((width - im.width) / 2)
+    borderHeight = round((height - im.height) / 2)
 
     leftPanel = im.crop((0, 0, sidePanelWidth, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
     rightPanel = im.crop((im.width - sidePanelWidth, 0, im.width, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
@@ -92,8 +92,8 @@ def renderImageMirrorSide(im, writePath, isBlur):
 
     fullim = Image.new('RGB', (width, height), botcol)
     fullim.paste(im, (sidePanelWidth, borderHeight, sidePanelWidth + im.width, borderHeight + im.height))
-    fullim.paste(leftPanel, (0, borderHeight, sidePanelWidth, height - borderHeight))
-    fullim.paste(rightPanel, (width - sidePanelWidth, borderHeight, width, height - borderHeight))
+    fullim.paste(leftPanel, (0, borderHeight, sidePanelWidth, im.height + borderHeight))
+    fullim.paste(rightPanel, (width - sidePanelWidth, borderHeight, width, im.height + borderHeight))
     fullim.save(writePath, 'PNG')
 
     print("saved image to", writePath)
