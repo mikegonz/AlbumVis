@@ -13,24 +13,12 @@ import spotipy.util as util
 from spotipy.oauth2 import SpotifyOAuth
 
 MAC = True
-mode = 'solid'
 
 #to account for mac's retina-display messing everything up
 MULT = 2 if MAC else 1
 
 WIDTH = 2560 #should use tk and be root.winfo_screenwidth() etc
 HEIGHT = 1600
-
-sp = spotipy.Spotify()
-
-currid = ''
-prevpath = 'uhoh.jpg'
-currpath = 'uhoh.jpg'
-previm = Image.open(prevpath)
-nextim = Image.open(currpath)
-errim = Image.open('uhoh.jpg')
-
-changing = 0
 
 # def is_adobe_rgb(img):
 #     return 'Adobe RGB' in img.info.get('icc_profile', '')
@@ -110,6 +98,9 @@ def renderImageCenter(im, writePath):
     return nextim        
 
 def renderImageSolid(im, writePath):
+    width = floor(WIDTH / MULT)
+    height = floor(HEIGHT / MULT)
+
     avgcol = (0, 0, 0)
     for i in [0,15]:
         y = i * im.height/16 + (im.height/32)
@@ -124,19 +115,10 @@ def renderImageSolid(im, writePath):
             avgcol = tuple(map(operator.add, avgcol, im.getpixel((x,y))))
             
     avgcol = tuple(map(operator.floordiv, avgcol, (60, 60, 60)))
-    width = 2560
-    height = 1600
-    full = Image.new('RGB', (width, height), avgcol)
-    #im = im.resize((floor(im.width/MULT), floor(im.height/MULT)))
-    #full.paste(im, (floor((width/2-320)/MULT), floor((height/2-320)/MULT), floor((width/2+320)/MULT), floor((height/2+320)/MULT)))
-    try:
-        full.paste(im, (floor((width/2)/MULT-320), floor((height/2)/MULT-320), floor((width/2)/MULT+320), floor((height/2)/MULT+320)))
-        full.save(writePath, 'PNG')
-        nextim = full
-    except:
-        # currpath = 'uhoh.jpg'
-        nextim = errim
-    return nextim
+    fullim = Image.new('RGB', (width, height), avgcol)
+    fullim.paste(im, (floor(width/2 - im.width/2), floor(height/2 - im.height/2), floor(width/2 + im.width/2), floor(height/2 + im.height/2)))
+    fullim.save(writePath, 'PNG')
+    return fullim
 
 ### if raw album art not already in cache, fetch and save at rawpath
 def fetchRawAlbumArt(track):
@@ -154,18 +136,12 @@ def fetchRawAlbumArt(track):
 #queries currently playing track and returns image of visualization, or err if no track is playing
 #return err, nextim, isNew
 def checkalbum(sp, currid, currim):
-    global prevpath
-    global currpath
-    global changing
-    global previm
 
     track = sp.current_user_playing_track()
     if track is not None:
         if currid != track['item']['album']['id']:
             nextid = track['item']['album']['id']
-            changing = 1.0
-            prevpath = currpath
-            currpath = path = 'cached_albums/' + mode + '/' + nextid + '.png'
+            path = 'cached_albums/' + mode + '/' + nextid + '.png'
             if(os.path.isfile(path)):
                 nextim = Image.open(path)
                 # if is_adobe_rgb(nextim):
@@ -198,48 +174,39 @@ def run(sp):
     canvas = tk.Canvas(root, width=(root.winfo_screenwidth()), height=(root.winfo_screenheight()), highlightthickness=0)
     canvas.pack()
 
-    global errim
+    errim = Image.open('uhoh.jpg')
     errim = errim.resize((floor(root.winfo_screenwidth()), floor(root.winfo_screenheight())))
     
     canvas.image = ImageTk.PhotoImage(errim)
     canvas.create_image(0, 0, image=canvas.image, anchor='nw')
 
     def update(currid, currim):
-        err, __newid, newim, isNew = checkalbum(sp, currid, currim)
+        err, newid, newim, isNew = checkalbum(sp, currid, currim)
         if(err):
             canvas.image = ImageTk.PhotoImage(errim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(2000, update)
-            return
-        if(isNew):
-            if(changing == 0):
-                canvas.image = ImageTk.PhotoImage(newim)
-                canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(1000, lambda : update(__newid, newim))
+            root.after(2000, lambda : update(None, errim))
+        elif(isNew):
+            root.after(10, lambda : updateim(1.0, currim, newim))
+            # if(changing == 0):
+            #     canvas.image = ImageTk.PhotoImage(newim)
+            #     canvas.create_image(0, 0, image=canvas.image, anchor='nw')
+            root.after(2000, lambda : update(newid, newim))
         else:
             root.after(2000, lambda : update(currid, currim))
 
-    def updateim():
-        global changing
-        global prevpath
-        global previm
-        global nextim
+    def updateim(changing, previm, nextim):
         if(changing > 0):
-            changing -= 0.05
             newim = Image.blend(nextim, previm, changing)
             canvas.image = ImageTk.PhotoImage(newim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
+            root.after(10, lambda : updateim(changing - 0.05, previm, nextim))
         elif (floor(changing*100) == 0 or ceil(changing*100) == 0):
-            newim = Image.open(currpath)
-            canvas.image = ImageTk.PhotoImage(newim)
+            canvas.image = ImageTk.PhotoImage(nextim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            changing -= 0.05
-            prevpath = currpath
-            previm = nextim
-        root.after(10, updateim)
 
-    root.after(10, lambda : update(None, None))
-    root.after(10, updateim)
+    root.after(10, lambda : update(None, errim))
+    #root.after(10, updateim)
     # root.after(5000, lambda: root.focus_force())
     root.mainloop()
     
