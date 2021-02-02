@@ -10,7 +10,7 @@ Currently, this application can only be run by the owner of a Spotify developer 
 
 If you do have a client ID and secret, or you are me—directions giving the _spotipy_ library access to the proper credentials and for running this application are found in the file `runexample.sh`.
 
-If spotify credentials have been exported as environment variables, run by:
+If spotify credentials have been exported as environment variables, run like so:
 
 `python3 albumvis.py <username> <display_mode>`
 
