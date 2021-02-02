@@ -17,36 +17,10 @@ MAC = True
 #to account for mac's retina-display messing everything up
 MULT = 2 if MAC else 1
 
-WIDTH = 2560 #should use tk and be root.winfo_screenwidth() etc
+WIDTH = 2560
 HEIGHT = 1600
 
-# def is_adobe_rgb(img):
-#     return 'Adobe RGB' in img.info.get('icc_profile', '')
-
-# def adobe_to_srgb(img):
-#     icc = tempfile.mkstemp(suffix='.icc')[1]
-#     with open(icc, 'w') as f:
-#         f.write(img.info.get('icc_profile'))
-#     srgb = ImageCms.createProfile('sRGB')
-#     img = ImageCms.profileToProfile(img, icc, srgb)
-#     return img
-
-def rgbtohsl(rgb):
-    hls = colorsys.rgb_to_hls(rgb[0]/255, rgb[1]/255, rgb[2]/255)
-    return (round(hls[0]*360), round(hls[2]*100), round(hls[1]*100))
-
-def hsltorgb(hsl):
-    rgb = colorsys.hls_to_rgb(hsl[0]/360, hsl[2]/100, hsl[1]/100)
-    return (round(rgb[0]*255), round(rgb[1]*255), round(rgb[2]*255))
-
-def rgbtohsv(rgb):
-    hsv = colorsys.rgb_to_hsv(rgb[0]/255, rgb[1]/255, rgb[2]/255)
-    return (round(hsv[0]*360), round(hsv[1]*100), round(hsv[2]*100))
-
-def hsvtorgb(hsv):
-    rgb = colorsys.hsv_to_rgb(hsv[0]/360, hsv[1]/100, hsv[2]/100)
-    return (round(rgb[0]*255), round(rgb[1]*255), round(rgb[2]*255))
-
+### helper fn to return avg color sampled from top and bottom of image
 def calcAverageColors(im):
     topcol = (0, 0, 0)
     botcol = (0, 0, 0)
@@ -63,6 +37,9 @@ def calcAverageColors(im):
     botcol = tuple(map(operator.floordiv, botcol, (16, 16, 16)))
     return topcol, botcol
 
+### render image flanked by mirrored panels on either side, with border
+# on top and bottom of avg colors sampled from the top of bottom of img, respectively
+# if isBlur, the mirrored side panels are blurred and muted as well
 def renderImageMirrorSide(im, writePath, isBlur):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
@@ -88,6 +65,7 @@ def renderImageMirrorSide(im, writePath, isBlur):
     nextim = fullim
     return nextim
 
+### render album art in center of a black background
 def renderImageCenter(im, writePath):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
@@ -97,6 +75,7 @@ def renderImageCenter(im, writePath):
     nextim = fullim
     return nextim        
 
+### render album art in center of a solid ackground of a sampled average color
 def renderImageSolid(im, writePath):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
@@ -132,10 +111,10 @@ def fetchRawAlbumArt(track):
             imgraw.save(rawpath, "PNG")
     return rawpath
 
-#args sp, currim
-#queries currently playing track and returns image of visualization, or err if no track is playing
-#return err, nextim, isNew
-def checkalbum(sp, currid, currim):
+### args sp, currim
+### queries currently playing track and returns image of visualization, or err if no track is playing
+### return err, nextim, isNew
+def fetchAlbumVis(sp, currid, currim):
 
     track = sp.current_user_playing_track()
     if track is not None:
@@ -144,8 +123,6 @@ def checkalbum(sp, currid, currim):
             path = 'cached_albums/' + mode + '/' + nextid + '.png'
             if(os.path.isfile(path)):
                 nextim = Image.open(path)
-                # if is_adobe_rgb(nextim):
-                #     nextim = adobe_to_srgb(nextim)
             else:
                 rawpath = fetchRawAlbumArt(track)
                 im = Image.open(rawpath)
@@ -166,6 +143,9 @@ def checkalbum(sp, currid, currim):
         #no track playing
         return 86, None, None, None
 
+
+### main fn that declares important values, defines update functions,
+# and sets update loop into motion
 def run(sp):
     root = tk.Tk()
     root.wm_attributes('-fullscreen','true')
@@ -174,14 +154,16 @@ def run(sp):
     canvas = tk.Canvas(root, width=(root.winfo_screenwidth()), height=(root.winfo_screenheight()), highlightthickness=0)
     canvas.pack()
 
+    startim = Image.open('start.jpg')
+
     errim = Image.open('uhoh.jpg')
-    errim = errim.resize((floor(root.winfo_screenwidth()), floor(root.winfo_screenheight())))
     
-    canvas.image = ImageTk.PhotoImage(errim)
+    canvas.image = ImageTk.PhotoImage(startim)
     canvas.create_image(0, 0, image=canvas.image, anchor='nw')
 
+    ### loop to call fns to fetch current track, display image or call transition function accordingly
     def update(currid, currim):
-        err, newid, newim, isNew = checkalbum(sp, currid, currim)
+        err, newid, newim, isNew = fetchAlbumVis(sp, currid, currim)
         if(err):
             canvas.image = ImageTk.PhotoImage(errim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
@@ -195,6 +177,7 @@ def run(sp):
         else:
             root.after(2000, lambda : update(currid, currim))
 
+    ### loop to transition previm into nextim
     def updateim(changing, previm, nextim):
         if(changing > 0):
             newim = Image.blend(nextim, previm, changing)
@@ -205,9 +188,7 @@ def run(sp):
             canvas.image = ImageTk.PhotoImage(nextim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
 
-    root.after(10, lambda : update(None, errim))
-    #root.after(10, updateim)
-    # root.after(5000, lambda: root.focus_force())
+    root.after(10, lambda : update(None, startim))
     root.mainloop()
     
 scope = 'user-read-currently-playing'

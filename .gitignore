@@ -3,3 +3,5 @@
 .cache*
 cached_albums/*/*.png
 cached_albums/*/*.jpg
+auth.sh
+run.sh
