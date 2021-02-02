@@ -4,12 +4,9 @@ import operator
 import os.path
 from math import floor, ceil
 import urllib.request
-import colorsys
 import tkinter as tk
 from PIL import Image, ImageTk, ImageFilter, ImageCms
-
 import spotipy
-import spotipy.util as util
 from spotipy.oauth2 import SpotifyOAuth
 
 MAC = True
@@ -21,62 +18,71 @@ WIDTH = 2560
 HEIGHT = 1600
 
 ### helper fn to return avg color sampled from top and bottom of image
-def calcAverageColors(im):
-    topcol = (0, 0, 0)
-    botcol = (0, 0, 0)
-    y = (im.height/32)
-    for j in range(16):
-        x = j * im.width/16 + (im.width/32)
-        topcol = tuple(map(operator.add, topcol, im.getpixel((x,y))))
+def calculate_average_colors(im, sample_count):
+    top_color = (0, 0, 0)
+    bottom_color = (0, 0, 0)
+    y = (im.height/(sample_count*2))
+    for j in range(sample_count):
+        x = j * im.width/sample_count + (im.width/(sample_count*2))
+        top_color = tuple(map(operator.add, top_color, im.getpixel((x,y))))
     
-    y = 15 * im.height/16 + (im.height/32)
-    for j in range(16):
-        x = j * im.width/16 + (im.width/32)
-        botcol = tuple(map(operator.add, botcol, im.getpixel((x,y))))
-    topcol = tuple(map(operator.floordiv, topcol, (16, 16, 16)))
-    botcol = tuple(map(operator.floordiv, botcol, (16, 16, 16)))
-    return topcol, botcol
+    y = 15 * im.height/sample_count + (im.height/(sample_count*2))
+    for j in range(sample_count):
+        x = j * im.width/sample_count + (im.width/(sample_count*2))
+        bottom_color = tuple(map(operator.add, bottom_color, im.getpixel((x,y))))
+    top_color = tuple(map(operator.floordiv, top_color, (sample_count, sample_count, sample_count)))
+    bottom_color = tuple(map(operator.floordiv, bottom_color, (sample_count, sample_count, sample_count)))
+    return top_color, bottom_color
 
 ### render image flanked by mirrored panels on either side, with border
 # on top and bottom of avg colors sampled from the top of bottom of img, respectively
-# if isBlur, the mirrored side panels are blurred and muted as well
-def renderImageMirrorSide(im, writePath, isBlur):
+# if is_blur, the mirrored side panels are blurred and muted as well
+def render_image_mirror_side(im, write_path, is_blur):
+    COLOR_SAMPLE_COUNT = 16
+    BLUR_FACTOR = 10
+    BLEND_FACTOR = 0.25
+
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
-    sidePanelWidth = round((width - im.width) / 2)
-    borderHeight = round((height - im.height) / 2)
-    topcol, botcol = calcAverageColors(im)
+    side_panel_width = round((width - im.width) / 2)
+    border_height = round((height - im.height) / 2)
+    top_color, bottom_color = calculate_average_colors(im, COLOR_SAMPLE_COUNT)
 
-    leftPanel = im.crop((0, 0, sidePanelWidth, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
-    rightPanel = im.crop((im.width - sidePanelWidth, 0, im.width, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
-    
-    if(isBlur):
-        maskim = Image.new('RGB', (320, 640), tuple(map(operator.floordiv, tuple(map(operator.add, topcol, botcol)), (2, 2, 2))))
-        leftPanel = Image.blend(leftPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
-        rightPanel = Image.blend(rightPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
+    left_panel = im\
+        .crop((0, 0, side_panel_width, im.height))\
+        .transpose(Image.FLIP_LEFT_RIGHT)
+    right_panel = im\
+        .crop((im.width - side_panel_width, 0, im.width, im.height))\
+        .transpose(Image.FLIP_LEFT_RIGHT)
 
-    fullim = Image.new('RGB', (width, height), botcol)
-    fullim.paste(Image.new('RGB', (width, round(height/2)), topcol), (0, 0, width, round(height/2)))
-    fullim.paste(im, (sidePanelWidth, borderHeight, sidePanelWidth + im.width, borderHeight + im.height))
-    fullim.paste(leftPanel, (0, borderHeight, sidePanelWidth, im.height + borderHeight))
-    fullim.paste(rightPanel, (width - sidePanelWidth, borderHeight, width, im.height + borderHeight))
-    fullim.save(writePath, 'PNG')
+    if(is_blur):
+        maskim = Image.new('RGB', (side_panel_width, im.height), tuple(map(operator.floordiv, tuple(map(operator.add, top_color, bottom_color)), (2, 2, 2))))
+        left_panel = Image.blend(
+            left_panel.filter(ImageFilter.GaussianBlur(BLUR_FACTOR)),
+            maskim, BLEND_FACTOR)
+        right_panel = Image.blend(
+            right_panel.filter(ImageFilter.GaussianBlur(BLUR_FACTOR)),
+            maskim, BLEND_FACTOR)
 
-    nextim = fullim
-    return nextim
+    fullim = Image.new('RGB', (width, height), bottom_color)
+    fullim.paste(Image.new('RGB', (width, round(height/2)), top_color), (0, 0, width, round(height/2)))
+    fullim.paste(im, (side_panel_width, border_height, side_panel_width + im.width, border_height + im.height))
+    fullim.paste(left_panel, (0, border_height, side_panel_width, im.height + border_height))
+    fullim.paste(right_panel, (width - side_panel_width, border_height, width, im.height + border_height))
+    fullim.save(write_path, 'PNG')
+    return fullim
 
 ### render album art in center of a black background
-def renderImageCenter(im, writePath):
+def render_image_center(im, write_path):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
     fullim = Image.new('RGB', (width, height), 'black')
     fullim.paste(im, (floor(width/2 - im.width/2), floor(height/2 - im.height/2), floor(width/2 + im.width/2), floor(height/2 + im.height/2)))
-    fullim.save(writePath, 'PNG')
-    nextim = fullim
-    return nextim        
+    fullim.save(write_path, 'PNG')
+    return fullim        
 
-### render album art in center of a solid ackground of a sampled average color
-def renderImageSolid(im, writePath):
+### render album art in center of a solid background of a sampled average color
+def render_image_solid(im, write_path):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
 
@@ -85,7 +91,6 @@ def renderImageSolid(im, writePath):
         y = i * im.height/16 + (im.height/32)
         for j in range(16):
             x = j * im.width/16 + (im.width/32)
-            
             avgcol = tuple(map(operator.add, avgcol, im.getpixel((x,y))))
     for i in [1,2,3,4,5,6,7,8,9,10,11,12,13,14]:
         y = i * im.height/16 + (im.height/32)
@@ -96,15 +101,15 @@ def renderImageSolid(im, writePath):
     avgcol = tuple(map(operator.floordiv, avgcol, (60, 60, 60)))
     fullim = Image.new('RGB', (width, height), avgcol)
     fullim.paste(im, (floor(width/2 - im.width/2), floor(height/2 - im.height/2), floor(width/2 + im.width/2), floor(height/2 + im.height/2)))
-    fullim.save(writePath, 'PNG')
+    fullim.save(write_path, 'PNG')
     return fullim
 
 ### if raw album art not already in cache, fetch and save at rawpath
 def fetchRawAlbumArt(track):
-    albumImgUrl = track['item']['album']['images'][0]['url']
+    album_img_url = track['item']['album']['images'][0]['url']
     rawpath = 'cached_albums/raw/' + track['item']['album']['id'] + '.jpg'
     if(not (os.path.isfile(rawpath))):
-        urllib.request.urlretrieve(albumImgUrl, rawpath)
+        urllib.request.urlretrieve(album_img_url, rawpath)
         imgraw = Image.open(rawpath)
         if imgraw.mode == "L": # if grayscale, convert to RGB
             imgraw = imgraw.convert("RGB")
@@ -114,7 +119,7 @@ def fetchRawAlbumArt(track):
 ### args sp, currim
 ### queries currently playing track and returns image of visualization, or err if no track is playing
 ### return err, nextim, isNew
-def fetchAlbumVis(sp, currid, currim):
+def get_album_visualization(sp, currid, currim):
 
     track = sp.current_user_playing_track()
     if track is not None:
@@ -128,13 +133,13 @@ def fetchAlbumVis(sp, currid, currim):
                 im = Image.open(rawpath)
                 # print(rawpath, im.format, "%dx%d" % im.size, im.mode)
                 if(mode == 'mirror-side'):
-                    nextim = renderImageMirrorSide(im, path, False)
+                    nextim = render_image_mirror_side(im, path, False)
                 elif(mode == 'mirror-side-blur'):
-                    nextim = renderImageMirrorSide(im, path, True)
+                    nextim = render_image_mirror_side(im, path, True)
                 elif(mode == 'center'):
-                    nextim = renderImageCenter(im, path)                                    
+                    nextim = render_image_center(im, path)                                    
                 elif(mode == 'solid'):
-                    nextim = renderImageSolid(im, path)
+                    nextim = render_image_solid(im, path)
             return None, nextid, nextim, True
         else:
             #same track playing
@@ -163,14 +168,14 @@ def run(sp):
 
     ### loop to call fns to fetch current track, display image or call transition function accordingly
     def update(currid, currim):
-        err, newid, newim, isNew = fetchAlbumVis(sp, currid, currim)
+        err, newid, newim, isNew = get_album_visualization(sp, currid, currim)
         if(err):
             canvas.image = ImageTk.PhotoImage(errim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
             root.after(2000, lambda : update(None, errim))
         elif(isNew):
-            root.after(10, lambda : updateim(1.0, currim, newim))
-            # if(changing == 0):
+            root.after(10, lambda : fade_to_next_image(1.0, currim, newim))
+            # if(fade_val == 0):
             #     canvas.image = ImageTk.PhotoImage(newim)
             #     canvas.create_image(0, 0, image=canvas.image, anchor='nw')
             root.after(2000, lambda : update(newid, newim))
@@ -178,13 +183,13 @@ def run(sp):
             root.after(2000, lambda : update(currid, currim))
 
     ### loop to transition previm into nextim
-    def updateim(changing, previm, nextim):
-        if(changing > 0):
-            newim = Image.blend(nextim, previm, changing)
+    def fade_to_next_image(fade_val, previm, nextim):
+        if(fade_val > 0):
+            newim = Image.blend(nextim, previm, fade_val)
             canvas.image = ImageTk.PhotoImage(newim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(10, lambda : updateim(changing - 0.05, previm, nextim))
-        elif (floor(changing*100) == 0 or ceil(changing*100) == 0):
+            root.after(10, lambda : fade_to_next_image(fade_val - 0.05, previm, nextim))
+        elif (floor(fade_val*100) == 0 or ceil(fade_val*100) == 0):
             canvas.image = ImageTk.PhotoImage(nextim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
 
