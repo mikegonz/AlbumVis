@@ -15,14 +15,13 @@ from spotipy.oauth2 import SpotifyOAuth
 MAC = True
 mode = 'solid'
 
+#to account for mac's retina-display messing everything up
 MULT = 2 if MAC else 1
 
-WIDTH = 2560
+WIDTH = 2560 #should use tk and be root.winfo_screenwidth() etc
 HEIGHT = 1600
 
 sp = spotipy.Spotify()
-
-errim = Image.open('uhoh.jpg')
 
 currid = ''
 prevpath = 'uhoh.jpg'
@@ -79,16 +78,13 @@ def calcAverageColors(im):
 def renderImageMirrorSide(im, writePath, isBlur):
     width = floor(WIDTH / MULT)
     height = floor(HEIGHT / MULT)
-    
     sidePanelWidth = round((width - im.width) / 2)
     borderHeight = round((height - im.height) / 2)
+    topcol, botcol = calcAverageColors(im)
 
     leftPanel = im.crop((0, 0, sidePanelWidth, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
     rightPanel = im.crop((im.width - sidePanelWidth, 0, im.width, im.height)).transpose(Image.FLIP_LEFT_RIGHT)
     
-    topcol, botcol = calcAverageColors(im)
-    print(topcol, botcol)
-
     if(isBlur):
         maskim = Image.new('RGB', (320, 640), tuple(map(operator.floordiv, tuple(map(operator.add, topcol, botcol)), (2, 2, 2))))
         leftPanel = Image.blend(leftPanel.filter(ImageFilter.GaussianBlur(10)), maskim, 0.25)
@@ -101,7 +97,6 @@ def renderImageMirrorSide(im, writePath, isBlur):
     fullim.paste(rightPanel, (width - sidePanelWidth, borderHeight, width, im.height + borderHeight))
     fullim.save(writePath, 'PNG')
 
-    print("saved image to", writePath)
     nextim = fullim
     return nextim
 
@@ -141,41 +136,44 @@ def renderImageSolid(im, writePath):
     except:
         # currpath = 'uhoh.jpg'
         nextim = errim
-    #full.save('full.png', 'PNG')
     return nextim
 
-def checkalbum(sp):
-    global currid
+### if raw album art not already in cache, fetch and save at rawpath
+def fetchRawAlbumArt(track):
+    albumImgUrl = track['item']['album']['images'][0]['url']
+    rawpath = 'cached_albums/raw/' + track['item']['album']['id'] + '.jpg'
+    if(not (os.path.isfile(rawpath))):
+        urllib.request.urlretrieve(albumImgUrl, rawpath)
+        imgraw = Image.open(rawpath)
+        if imgraw.mode == "L": # if grayscale, convert to RGB
+            imgraw = imgraw.convert("RGB")
+            imgraw.save(rawpath, "PNG")
+    return rawpath
+
+#args sp, currim
+#queries currently playing track and returns image of visualization, or err if no track is playing
+#return err, nextim, isNew
+def checkalbum(sp, currid, currim):
     global prevpath
     global currpath
     global changing
     global previm
-    global nextim
 
-    #print(currid)
     track = sp.current_user_playing_track()
     if track is not None:
         if currid != track['item']['album']['id']:
-            print(currid)
-            currid = track['item']['album']['id']
+            nextid = track['item']['album']['id']
             changing = 1.0
             prevpath = currpath
-            albumImgUrl = track['item']['album']['images'][0]['url']
-            pathRaw = 'cached_albums/raw/' + currid + '.jpg'
-            if(not (os.path.isfile(pathRaw))):
-                urllib.request.urlretrieve(albumImgUrl, pathRaw)
-                imgraw = Image.open(pathRaw)
-                if imgraw.mode == "L":
-                    imgraw = imgraw.convert("RGB")
-                    imgraw.save(pathRaw, "PNG")
-            currpath = path = 'cached_albums/' + mode + '/' + currid + '.png'
+            currpath = path = 'cached_albums/' + mode + '/' + nextid + '.png'
             if(os.path.isfile(path)):
                 nextim = Image.open(path)
                 # if is_adobe_rgb(nextim):
                 #     nextim = adobe_to_srgb(nextim)
             else:
-                im = Image.open(pathRaw)
-                print(pathRaw, im.format, "%dx%d" % im.size, im.mode)
+                rawpath = fetchRawAlbumArt(track)
+                im = Image.open(rawpath)
+                # print(rawpath, im.format, "%dx%d" % im.size, im.mode)
                 if(mode == 'mirror-side'):
                     nextim = renderImageMirrorSide(im, path, False)
                 elif(mode == 'mirror-side-blur'):
@@ -184,17 +182,17 @@ def checkalbum(sp):
                     nextim = renderImageCenter(im, path)                                    
                 elif(mode == 'solid'):
                     nextim = renderImageSolid(im, path)
-            return (True, 1000)
+            return None, nextid, nextim, True
         else:
-            return (False, True)
+            #same track playing
+            return None, currid, currim, False
     else:
-        return (False, False)
+        #no track playing
+        return 86, None, None, None
 
 def run(sp):
     root = tk.Tk()
- #   root.overrideredirect(True)
     root.wm_attributes('-fullscreen','true')
-    #root.attributes("-topmost", True)
     root.tk.call("::tk::unsupported::MacWindowStyle", "style", root._w, "plain", "none")
 
     canvas = tk.Canvas(root, width=(root.winfo_screenwidth()), height=(root.winfo_screenheight()), highlightthickness=0)
@@ -205,23 +203,21 @@ def run(sp):
     
     canvas.image = ImageTk.PhotoImage(errim)
     canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-    def update():
-        global changing
-        #print(root.winfo_screenwidth(), root.winfo_screenheight())
-        result = checkalbum(sp)
-        if(result[0]):
-            print(result[0])
-            newim = Image.open(currpath)
-            #newim = newim.resize((floor(root.winfo_screenwidth()), floor(root.winfo_screenheight())))
+
+    def update(currid, currim):
+        err, __newid, newim, isNew = checkalbum(sp, currid, currim)
+        if(err):
+            canvas.image = ImageTk.PhotoImage(errim)
+            canvas.create_image(0, 0, image=canvas.image, anchor='nw')
+            root.after(2000, update)
+            return
+        if(isNew):
             if(changing == 0):
                 canvas.image = ImageTk.PhotoImage(newim)
                 canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(result[1], update)
+            root.after(1000, lambda : update(__newid, newim))
         else:
-            if(not result[1]):
-                canvas.image = ImageTk.PhotoImage(errim)
-                canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(2000, update)
+            root.after(2000, lambda : update(currid, currim))
 
     def updateim():
         global changing
@@ -242,9 +238,9 @@ def run(sp):
             previm = nextim
         root.after(10, updateim)
 
-    root.after(10, update)
+    root.after(10, lambda : update(None, None))
     root.after(10, updateim)
-    root.after(5000, lambda: root.focus_force())
+    # root.after(5000, lambda: root.focus_force())
     root.mainloop()
     
 scope = 'user-read-currently-playing'
