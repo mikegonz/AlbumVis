@@ -105,7 +105,7 @@ def render_image_solid(im, write_path):
     return fullim
 
 ### if raw album art not already in cache, fetch and save at rawpath
-def fetchRawAlbumArt(track):
+def fetch_raw_album_art(track):
     album_img_url = track['item']['album']['images'][0]['url']
     rawpath = 'cached_albums/raw/' + track['item']['album']['id'] + '.jpg'
     if(not (os.path.isfile(rawpath))):
@@ -129,7 +129,7 @@ def get_album_visualization(sp, currid, currim):
             if(os.path.isfile(path)):
                 nextim = Image.open(path)
             else:
-                rawpath = fetchRawAlbumArt(track)
+                rawpath = fetch_raw_album_art(track)
                 im = Image.open(rawpath)
                 # print(rawpath, im.format, "%dx%d" % im.size, im.mode)
                 if(mode == 'mirror-side'):
@@ -150,8 +150,11 @@ def get_album_visualization(sp, currid, currim):
 
 
 ### main fn that declares important values, defines update functions,
-# and sets update loop into motion
+# and sets update loop in motion
+# arg sp is initialized Spotipy object
 def run(sp):
+    UPDATE_INTERVAL = 2000
+    FADE_INTERVAL = 10
     root = tk.Tk()
     root.wm_attributes('-fullscreen','true')
     root.tk.call("::tk::unsupported::MacWindowStyle", "style", root._w, "plain", "none")
@@ -160,7 +163,6 @@ def run(sp):
     canvas.pack()
 
     startim = Image.open('start.jpg')
-
     errim = Image.open('uhoh.jpg')
     
     canvas.image = ImageTk.PhotoImage(startim)
@@ -172,15 +174,12 @@ def run(sp):
         if(err):
             canvas.image = ImageTk.PhotoImage(errim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(2000, lambda : update(None, errim))
+            root.after(UPDATE_INTERVAL, lambda : update(None, errim))
         elif(isNew):
             root.after(10, lambda : fade_to_next_image(1.0, currim, newim))
-            # if(fade_val == 0):
-            #     canvas.image = ImageTk.PhotoImage(newim)
-            #     canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(2000, lambda : update(newid, newim))
+            root.after(UPDATE_INTERVAL, lambda : update(newid, newim))
         else:
-            root.after(2000, lambda : update(currid, currim))
+            root.after(UPDATE_INTERVAL, lambda : update(currid, currim))
 
     ### loop to transition previm into nextim
     def fade_to_next_image(fade_val, previm, nextim):
@@ -188,12 +187,12 @@ def run(sp):
             newim = Image.blend(nextim, previm, fade_val)
             canvas.image = ImageTk.PhotoImage(newim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
-            root.after(10, lambda : fade_to_next_image(fade_val - 0.05, previm, nextim))
-        elif (floor(fade_val*100) == 0 or ceil(fade_val*100) == 0):
+            root.after(FADE_INTERVAL, lambda : fade_to_next_image(fade_val - 0.05, previm, nextim))
+        else:
             canvas.image = ImageTk.PhotoImage(nextim)
             canvas.create_image(0, 0, image=canvas.image, anchor='nw')
 
-    root.after(10, lambda : update(None, startim))
+    root.after(FADE_INTERVAL, lambda : update(None, startim))
     root.mainloop()
     
 scope = 'user-read-currently-playing'
